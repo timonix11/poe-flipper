@@ -104,7 +104,7 @@ def load_hotkey():
             CONFIG_FILE.write_text(
                 json.dumps({"hotkey": spec, "auto_update": True,
                             "wall_fraction": 0.25, "greedy_min_pct": 15,
-                            "fill_verify": True}, indent=2),
+                            "fill_verify": False}, indent=2),
                 encoding="utf-8")
         except OSError:
             pass
@@ -137,8 +137,10 @@ GREEDY_MIN_PCT = 15.0   # the Greedy buy row prices for at least this margin
 WALL_FRACTION = 0.25    # a level is "the wall" when it holds at least this
                         # share of the deepest level's stock
                         # (override: "wall_fraction" in flipper_config.json)
-FILL_VERIFY = True      # re-OCR the game fields after auto-fill and warn on
-                        # mismatch ("fill_verify" in flipper_config.json)
+FILL_VERIFY = False     # re-OCR the game fields after auto-fill and warn on
+                        # mismatch — off by default: the OCR misreads the
+                        # small fields often enough to cry wolf
+                        # ("fill_verify" in flipper_config.json)
 DEBUG_KEEP = 30         # newest suspicious captures kept in debug/
 
 

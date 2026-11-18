@@ -70,9 +70,10 @@ If the flipper.py path ever moves, recompile the launcher:
    swapping needed.
 6. Each row has a ⤷ FILL button that auto-fills the game: it clicks the
    I Have amount field, clears it, types the amount, then does the same for
-   I Want — afterwards it re-reads both fields via OCR and flashes a red
-   warning if the game shows different numbers (disable with
-   `"fill_verify": false`). The first row's FILL is focused, so
+   I Want. (Optionally it can re-read both fields via OCR afterwards and
+   flash a red warning on a mismatch — enable with `"fill_verify": true`;
+   off by default because the OCR misreads those small fields too often.)
+   The first row's FILL is focused, so
    Alt+Q → quantity → Enter → Enter is the whole flow; Tab moves between
    rows. Click positions come from the calibrated geometry automatically;
    `python flipper.py --pos` shows the computed points for sanity checks.
@@ -106,7 +107,7 @@ digit, `f1`–`f24` or `space`. Invalid combos fall back to `alt+q` (see
 The same file holds tuning knobs (all optional): `wall_fraction` (share of
 the deepest level's stock that makes a level "the wall", default 0.25),
 `greedy_min_pct` (margin floor for the Greedy flip row, default 15),
-`fill_verify` (re-OCR the game fields after auto-fill, default true),
+`fill_verify` (re-OCR the game fields after auto-fill, default false),
 `auto_update` (default true).
 
 ## Development
