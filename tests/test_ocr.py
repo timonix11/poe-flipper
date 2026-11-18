@@ -131,6 +131,20 @@ class TestFixtures(OcrBase):
         self.assertEqual(len(d["available"]), 6)
         self.assertEqual(d["available"][0]["price"], 1.5)
 
+    def test_wide_ratio_cells(self):
+        # tooltip sits further left in the crop and the 5-character ratios
+        # ("10.40 : 1", "> 10.56 : 1") start left of the old fixed x-band:
+        # they were dropped and a live market was flagged dead
+        d = self.parse("book_wide_ratio_cells.png")
+        self.assertEqual([round(e["price"], 2) for e in d["available"]],
+                         [9.33, 9.1, 9.0, 8.8, 8.5, 8.5])
+        self.assertEqual([round(e["price"], 2) for e in d["competing"]],
+                         [10.0, 10.4, 10.44, 10.5, 10.56, 10.56])
+        self.assertTrue(d["available"][-1]["approx"])
+        self.assertTrue(d["competing"][-1]["approx"])
+        self.assertEqual(d["unparsed"], 0)
+        self.assertFalse(flipper.build_suggestions(d, 100)["dead"])
+
 
 if __name__ == "__main__":
     unittest.main()

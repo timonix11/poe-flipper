@@ -56,7 +56,13 @@ OCR_SCALE = 2                        # upscale factor before OCR
 ROW_PITCH = 22 * OCR_SCALE           # vertical distance between table rows (scaled px)
 TABLE_X_BAND = (45, 395)             # parchment content span inside the tables
                                      # crop (scaled px) — cells outside are
-                                     # background noise, not table data
+                                     # background noise, not table data.  Only
+                                     # the fallback: normally the span is
+                                     # anchored to the "Ratio" sub-header
+RATIO_HDR_X = 93                     # where the "Ratio" sub-header starts when
+                                     # TABLE_X_BAND is exactly right
+BAND_LEFT_SLACK = 15                 # wide rows ("> 10.56 : 1") reach further
+                                     # left than the fixed band allowed
 
 __version__ = "1.0.20"
 GITHUB_REPO = "tirendus/poe-flipper"
@@ -157,7 +163,10 @@ DENOM_WEIGHT = 1.5      # preference for simple denominators, normalized by
 
 def log(msg):
     line = f"[{time.strftime('%H:%M:%S')}] {msg}"
-    print(line)
+    try:
+        print(line)
+    except UnicodeEncodeError:      # console codepage can't show OCR junk
+        print(line.encode("ascii", "replace").decode())
     try:
         with open(LOG_FILE, "a", encoding="utf-8") as f:
             f.write(line + "\n")
@@ -359,18 +368,35 @@ def _assemble_zone(cells, y0, y1, market_form, market_big):
     return out
 
 
+def _table_x_band(cells):
+    """Horizontal span of the parchment in the tables crop.  The tooltip
+    isn't always at the same offset inside the crop (calibration profiles
+    differ by tens of px), so anchor the span to the "Ratio" sub-header
+    instead of trusting fixed coordinates — a fixed left edge silently
+    clipped wide ratio cells and made live markets look dead."""
+    xs = sorted(c[1] for c in cells
+                if c[0].strip().lower().startswith("ratio"))
+    if not xs:
+        return TABLE_X_BAND
+    shift = xs[len(xs) // 2] - RATIO_HDR_X
+    return (TABLE_X_BAND[0] + shift - BAND_LEFT_SLACK,
+            TABLE_X_BAND[1] + shift)
+
+
 def read_tables(pil_img):
     """OCR the tables crop, return [(section, text), ...] with section in
     {'market', 'available', 'competing'}."""
     global _LAST_CELLS
-    cells = [c for c in ocr_cells(pil_img)
-             if TABLE_X_BAND[0] <= c[1] <= TABLE_X_BAND[1]]
+    raw = ocr_cells(pil_img)
+    lo, hi = _table_x_band(raw)
+    cells = [c for c in raw if lo <= c[1] <= hi]
     _LAST_CELLS = cells
     rows = group_rows(cells)
     y_market = y_avail = y_comp = y_end = None
     header_rows = []          # the two "Ratio | Stock" sub-header lines
     for cy, text in rows:
-        low = text.lower()
+        # OCR likes to split titles ("COM PETING TRADES")
+        low = text.lower().replace(" ", "")
         if "market" in low and y_market is None:
             y_market = cy
         elif "available" in low and y_avail is None:
@@ -474,6 +500,12 @@ def parse_tables(tagged_rows):
     data = {"market": None, "available": [], "competing": [], "unparsed": 0}
     for section, text in tagged_rows:
         low = text.lower()
+        if text.startswith("?ratio?"):
+            # a stock cell whose ratio cell was never read — a lost row,
+            # not a header fragment
+            data["unparsed"] += 1
+            log(f"unparsed {section} row: {text!r}")
+            continue
         if any(k in low for k in ("trades", "ratio", "stock")):
             continue  # header fragments
         m = RATIO_ROW.match(text)
