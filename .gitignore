@@ -2,6 +2,7 @@
 .venv/
 __pycache__/
 PoE Flipper.exe
+PoE Stash.exe
 poe-flipper.zip
 
 # runtime state / diagnostics
@@ -13,6 +14,15 @@ last_capture.png
 last_ocr.txt
 debug/
 dump_*.png
+
+# stash window: stash_config.json holds a session cookie - never commit it
+stash_config.json
+stash_cache.json
+stash_state.json
+price_cache.json
+stash_window.log
+stash_check_result.txt
+screens/
 
 # local tooling
 .claude/

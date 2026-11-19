@@ -41,8 +41,15 @@ $csc = "$env:WINDIR\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
 if (Test-Path $csc) {
     & $csc /nologo /target:winexe /win32icon:"$root\flipper.ico" /out:"$root\PoE Flipper.exe" "$root\launcher.cs"
     Write-Host "Launcher compiled: PoE Flipper.exe"
+    & $csc /nologo /target:winexe /win32icon:"$root\flipper.ico" /out:"$root\PoE Stash.exe" "$root\launcher_stash.cs"
+    Write-Host "Launcher compiled: PoE Stash.exe"
 } else {
-    Write-Host "csc.exe not found - use start_flipper.bat instead of the exe." -ForegroundColor Yellow
+    Write-Host "csc.exe not found - use start_flipper.bat / start_stash.bat instead of the exes." -ForegroundColor Yellow
+}
+
+# --- 4. stash window settings template (never overwrites an existing one) ---
+if (-not (Test-Path "$root\stash_config.json")) {
+    Copy-Item "$root\stash_config.example.json" "$root\stash_config.json"
 }
 
 Write-Host ""
