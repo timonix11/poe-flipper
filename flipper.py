@@ -234,6 +234,20 @@ def group_rows(cells, pitch=ROW_PITCH):
 
 
 X_SPLIT = 232   # scaled px: ratio column is left of this, stock column right
+                # (at the reference tooltip position — read_tables moves it
+                # along with the tooltip)
+
+_SPACED_THOUSANDS = re.compile(r"\d{1,3}(?:\s\d{3})+")
+
+
+def _join_thousands(text):
+    """'12 626' -> '12626'.  Depending on the client the game groups
+    thousands with a space instead of a comma, and the OCR keeps that space
+    inside the stock cell — the row then read as '1 : 214 12 626' and was
+    dropped as unparsable.  Only a cell that is nothing but such a number is
+    touched; anything else stays as read and fails safe downstream."""
+    t = text.strip()
+    return re.sub(r"\s", "", t) if _SPACED_THOUSANDS.fullmatch(t) else text
 
 
 def _repair_ratio_token(tok, stock_txt, above, below, market_big, one_first):
@@ -273,7 +287,7 @@ def _repair_ratio_token(tok, stock_txt, above, below, market_big, one_first):
     return f"{prefix}{ratio} {stock_txt}".strip()
 
 
-def _assemble_zone(cells, y0, y1, market_form, market_big):
+def _assemble_zone(cells, y0, y1, market_form, market_big, x_split=X_SPLIT):
     """Rebuild one table section from raw cells by pairing each stock cell
     with its ratio cell — same line, or the wrapped line ~half a row
     below — then repairing broken ratio tokens."""
@@ -284,7 +298,7 @@ def _assemble_zone(cells, y0, y1, market_form, market_big):
         if not any(ch.isdigit() for ch in c[0]) or \
                 "ratio" in low or "stock" in low or "trades" in low:
             continue
-        (ratios if c[1] < X_SPLIT else stocks).append(c)
+        (ratios if c[1] < x_split else stocks).append(c)
 
     pairs, used = [], set()
     for st in sorted(stocks, key=lambda c: c[2]):
@@ -310,7 +324,7 @@ def _assemble_zone(cells, y0, y1, market_form, market_big):
     # overprinted glyphs, or an unparsable fragment) is a repair candidate
     texts, bigs, forms = [], [], []
     for rt, st in pairs:
-        stock_txt = st[0] if st is not None else ""
+        stock_txt = _join_thousands(st[0]) if st is not None else ""
         if rt is None:
             texts.append(f"?ratio? {stock_txt}")
             bigs.append(None)
@@ -391,6 +405,10 @@ def read_tables(pil_img):
     global _LAST_CELLS
     raw = ocr_cells(pil_img)
     lo, hi = _table_x_band(raw)
+    # the column split travels with the tooltip just like the band does —
+    # left fixed, a tooltip sitting further left put wide stock numbers
+    # ("697 288") into the ratio column and lost them
+    x_split = X_SPLIT + (hi - TABLE_X_BAND[1])
     cells = [c for c in raw if lo <= c[1] <= hi]
     _LAST_CELLS = cells
     rows = group_rows(cells)
@@ -447,11 +465,11 @@ def read_tables(pil_img):
     if y_avail is not None:
         avail_end = y_comp if y_comp is not None else y_stop
         for text in _assemble_zone(cells, y_avail, min(avail_end, y_stop),
-                                   market_form, market_big):
+                                   market_form, market_big, x_split):
             tagged.append(("available", text))
     if y_comp is not None:
         for text in _assemble_zone(cells, y_comp, y_stop,
-                                   market_form, market_big):
+                                   market_form, market_big, x_split):
             tagged.append(("competing", text))
     return tagged
 
