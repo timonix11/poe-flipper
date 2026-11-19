@@ -82,6 +82,49 @@ If the flipper.py path ever moves, recompile the launcher:
 If no competing offers exist (dead market), targets fall back to
 market/available ratio +0/15/30% and a warning is shown.
 
+## Stash window and assisted selling
+
+`PoE Stash.exe` (or `start_stash.bat`) is a second program in the same
+folder. It reuses `flipper.py`'s screen reading, pricing and auto-fill, and
+adds two things.
+
+**What is in the stash and what it is worth.** A table of every
+exchange-tradeable stack with quantity, price and total, most valuable first,
+and a tick box per item for what may be sold. Contents come from the
+website's own stash endpoint, prices from poe.ninja's currency-exchange
+overview (cached for 30 minutes).
+
+Setup: put your account name (with the `#1234` part), the league and the
+value of the `POESESSID` cookie from pathofexile.com into `stash_config.json`
+(`setup.bat` creates it from `stash_config.example.json`). The cookie is a
+login session: it stays in that file, is sent only to www.pathofexile.com and
+is never logged — do not share the file. The endpoint is unofficial and may
+stop working without notice; requests are paced to the limits the site
+reports.
+
+**Selling the ticked items.** "Start selling" queues the ticked rows, most
+valuable first, and shows a small bar at the bottom of the screen. With the
+exchange open, each press of **Alt+W** handles the next item: it sets I Want
+to Chaos Orb if needed, picks the item in the I Have picker through its
+search box, hovers the market ratio with Alt held, reads the tables with
+flipper's own pipeline and prices with `build_suggestions` — the same numbers
+Alt+Q would give. Two tick boxes decide how much it asks: "Sell everything"
+skips the quantity question (the whole stack is offered), "Undercut all"
+skips the price list. The amounts are typed in and the cursor is parked on
+Place Order; pressing it is always yours. "Sell selected" queues only the
+highlighted rows, whatever their tick boxes say.
+
+> **Rules.** GGG's guidelines for third-party tools allow a macro one game
+> action and one screen read per manual key press. A single Alt+W press does
+> a series of clicks, a paste and several screen reads, so this feature is
+> outside those guidelines and using it puts the account at risk. It is
+> deliberately attended — one press per item, Place Order by hand — and does
+> nothing to disguise its input. Decide for yourself.
+
+Limits: ratios of 1000 and up are not read yet (those items stop with a
+message — skip them); collecting finished orders is manual. Every failed
+step saves what it saw to `debug/sell_*.jpg`.
+
 ## Auto-update
 
 The app checks the repo's latest GitHub release shortly after startup and
@@ -120,7 +163,11 @@ Run the regression suite before any change lands:
 
 `tests/test_math.py` replays every pricing/parsing bug ever fixed against
 its original order book; `tests/test_ocr.py` runs the full OCR pipeline on
-synthetic screenshots (any resolution) and real captured fixtures.
+synthetic screenshots (any resolution) and real captured fixtures;
+`tests/test_stash.py` covers the stash window's data layer against a fake
+HTTP layer (no network); `tests/test_seller.py` runs the selling helper on
+real 4K captures of the exchange (`tests/fixtures/faustus/`) through a
+scripted stand-in for the game, so no input is ever sent.
 
 Releases go through `release.py`, which refuses to publish unless the tree
 is clean and the suite passes, then bumps the version, tags, builds the zip

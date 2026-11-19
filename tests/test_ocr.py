@@ -145,6 +145,19 @@ class TestFixtures(OcrBase):
         self.assertEqual(d["unparsed"], 0)
         self.assertFalse(flipper.build_suggestions(d, 100)["dead"])
 
+    def test_spaced_thousands(self):
+        # 4K client grouping thousands with a space: "9 288", "12 626" and
+        # the "697 288" aggregate were all lost, leaving 3 of 6 rival levels
+        d = self.parse("book_spaced_thousands.png")
+        self.assertEqual([(e["b"], e["stock"]) for e in d["available"]],
+                         [(221.0, 12), (222.0, 13), (223.0, 63), (224.0, 92),
+                          (225.0, 106), (225.0, 389)])
+        self.assertEqual([(e["b"], e["stock"]) for e in d["competing"]],
+                         [(220.0, 443), (217.0, 217), (216.0, 9288),
+                          (215.0, 5375), (214.0, 12626), (214.0, 697288)])
+        self.assertEqual(d["unparsed"], 0)
+        self.assertTrue(d["competing"][-1]["approx"])
+
 
 if __name__ == "__main__":
     unittest.main()

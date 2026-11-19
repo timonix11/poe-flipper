@@ -390,5 +390,97 @@ class TestWrappedAssembly(unittest.TestCase):
         self.assertFalse(d["available"][-2]["approx"])
 
 
+class TestSpacedThousands(unittest.TestCase):
+    """Clients that group thousands with a space ("12 626", not "12,626"):
+    every level holding 1000+ stock was dropped as unparsable, and with the
+    tooltip sitting left of its reference spot the 6-digit aggregate stock
+    fell into the ratio column.  Cells are real OCR output (4K capture)."""
+
+    BOOK = [    # shallow sellers, deep rival buyers
+        ('MARKET RATIO', 66, 46, 170), ('1 : 224', 157, 92, 80),
+        ('AVAILABLE TRADES', 57, 156, 230), ('Ratio', 67, 208, 45),
+        ('Stock', 240, 208, 45),
+        ('1 : 221', 69, 251, 75), ('12', 268, 252, 22),
+        ('1 : 222', 68, 296, 75), ('13', 268, 297, 22),
+        ('1 : 223', 69, 342, 75), ('63', 267, 344, 22),
+        ('1 : 224', 68, 390, 75), ('92', 265, 391, 22),
+        ('1 : 225', 68, 436, 75), ('106', 257, 435, 34),
+        ('< 1 : 225', 49, 483, 95), ('389', 255, 483, 34),
+        ('COMPETING TRADES', 43, 552, 250), ('Ratio', 67, 604, 45),
+        ('Stock', 240, 602, 45),
+        ('1 : 220', 69, 646, 75), ('443', 256, 648, 34),
+        ('1 : 217', 68, 692, 75), ('217', 258, 693, 34),
+        ('1 : 216', 70, 738, 75), ('9 288', 239, 738, 58),
+        ('1 : 215', 68, 786, 75), ('5 375', 245, 786, 58),
+        ('1 : 214', 68, 832, 75), ('12 626', 236, 830, 68),
+        ('> 1 : 214', 49, 879, 95), ('697288', 226, 878, 72),
+    ]
+
+    INTACT = [  # '21 : 1' is a perfectly good ratio next to a spaced stock
+        ('MARKET RATIO', 66, 46, 170), ('22 :1', 165, 92, 60),
+        ('AVAILABLE TRADES', 57, 156, 230), ('Ratio', 67, 208, 45),
+        ('Stock', 240, 207, 45),
+        ('22 : 1', 88, 251, 60), ('616', 260, 250, 34),
+        ('21 : 1', 93, 296, 60), ('2 499', 240, 298, 58),
+        ('20 : 1', 84, 343, 60), ('1700', 243, 344, 48),
+        ('19 : 1', 89, 390, 60), ('1900', 240, 390, 48),
+        ('18 : 1', 89, 434, 60), ('90', 262, 438, 22),
+        ('< 18 : 1', 68, 482, 80), ('1432', 246, 482, 48),
+        ('COMPETING TRADES', 43, 552, 250), ('Ratio', 66, 604, 45),
+        ('Stock', 240, 602, 45),
+        ('24 : 1', 86, 646, 60), ('15', 268, 648, 22),
+        ('24.50 : 1', 40, 693, 100), ('18', 268, 692, 22),
+        ('25 : 1', 87, 739, 60), ('81', 270, 738, 22),
+        ('26 : 1', 84, 784, 60), ('7', 273, 787, 12),
+        ('27 : 1', 90, 832, 60), ('50', 263, 833, 22),
+        ('> 27 : 1', 64, 880, 80), ('307', 255, 880, 34),
+    ]
+
+    def parse(self, cells):
+        from PIL import Image
+        orig = flipper.ocr_cells
+        flipper.ocr_cells = lambda img, scale=2: list(cells)
+        try:
+            tagged = flipper.read_tables(Image.new("RGB", (250, 550)))
+        finally:
+            flipper.ocr_cells = orig
+        return parse_tables(tagged)
+
+    def test_join_thousands(self):
+        j = flipper._join_thousands
+        self.assertEqual(j("9 288"), "9288")
+        self.assertEqual(j("12 626"), "12626")
+        self.assertEqual(j("1 424 695"), "1424695")
+        self.assertEqual(j("9 288"), "9288")      # no-break space
+        # not a grouped number -> left exactly as read (fails safe later)
+        for text in ("85", "12 44", "1 2345", "1 : 216", "9 288 x"):
+            self.assertEqual(j(text), text)
+
+    def test_spaced_stock_levels_kept(self):
+        d = self.parse(self.BOOK)
+        self.assertEqual([(e["b"], e["stock"]) for e in d["available"]],
+                         [(221.0, 12), (222.0, 13), (223.0, 63), (224.0, 92),
+                          (225.0, 106), (225.0, 389)])
+        self.assertEqual([(e["b"], e["stock"]) for e in d["competing"]],
+                         [(220.0, 443), (217.0, 217), (216.0, 9288),
+                          (215.0, 5375), (214.0, 12626), (214.0, 697288)])
+        self.assertEqual(d["unparsed"], 0)
+        self.assertTrue(d["available"][-1]["approx"])
+        self.assertTrue(d["competing"][-1]["approx"])
+        # the wall is the first deep level (9 288 @ 1:216), not the 443
+        # scrap on top — which is all that was left while 1000+ was dropped
+        self.assertEqual(classify_book(d["competing"])["wall"]["b"], 216.0)
+
+    def test_good_ratio_not_repaired(self):
+        # the unmatched row used to go through wrapped-ratio repair, which
+        # rewrote '21 : 1' into '22.1 : 1' before it was dropped anyway
+        d = self.parse(self.INTACT)
+        self.assertEqual([(e["a"], e["stock"]) for e in d["available"]],
+                         [(22.0, 616), (21.0, 2499), (20.0, 1700),
+                          (19.0, 1900), (18.0, 90), (18.0, 1432)])
+        self.assertEqual(len(d["competing"]), 6)
+        self.assertEqual(d["unparsed"], 0)
+
+
 if __name__ == "__main__":
     unittest.main()
